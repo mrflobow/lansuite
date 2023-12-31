@@ -59,6 +59,9 @@ switch ($step) {
 switch ($step) {
     // Check Environment
     default:
+        // TODO: Decided to keep?
+        $cache->delete('config');
+        
         $dsp->NewContent(t('Lansuite Installation und Administration'), t('Willkommen bei der Installation von Lansuite.<br />Im ersten Schritt wird die Konfiguration deines Webservers überprüft.<br />Sollte alles korrekt sein, so drücke bitte am Ende der Seite auf <b>Weiter</b> um mit der Eingabe der Grundeinstellungen fortzufahren.'));
 
         $dsp->SetForm("index.php?mod=install&action=wizard");
@@ -162,6 +165,8 @@ switch ($step) {
         $config["database"]["database"] = $_POST["database"];
         $config["database"]["prefix"] = $_POST["prefix"];
         $config["lansuite"]["default_design"] = $_POST["design"];
+
+        print($config);
         //flush cached values to force recreation on next load
         $cache->delete('config');
         $dsp->NewContent(t('Datenbankgenerierung'), t('Das Setup versucht nun die Datenbank zu initialisieren.'));
@@ -170,9 +175,11 @@ switch ($step) {
         if (!$install->WriteConfig()) {
             $continue = 0;
             $output .= $fail_leadin . t('Datei \'config.php\' konnte <strong>nicht</strong> geschrieben werden.') . $leadout . HTML_NEWLINE . HTML_NEWLINE;
+            print("fehler");
         } else {
             $output .= t('Datei \'config.php\' wurde erfolgreich geschrieben.') .HTML_NEWLINE . HTML_NEWLINE;
 
+            // TODO: Refactor TryCreateDB()
             $res = $install->TryCreateDB($request->request->get('resetdb'));
             switch ($res) {
                 case 0:
@@ -197,6 +204,7 @@ switch ($step) {
             $output .= HTML_NEWLINE . HTML_NEWLINE;
 
             if ($res == 1 or $res == 3 or $res == 5) {
+                // TODO: Add here Database connect and refactor requests below
                 $db->connect();
 
                 if ($db->success) {

@@ -616,7 +616,7 @@ class Install
      */
     public function envcheck(array $configuration)
     {
-        global $db, $dsp, $func;
+        global $database, $dsp, $func;
 
         $continue = 1;
 
@@ -640,7 +640,7 @@ class Install
 
         // MySQLi extension
         if (extension_loaded("mysqli")) {
-            $mysql_version = sprintf("%s\n", $db->client_info());
+            $mysql_version = sprintf("%s\n", $database->getClientInfo());
             if (!$mysql_version) {
                 $mysql_version = t('Unbekannt');
             }
@@ -652,12 +652,15 @@ class Install
         $dsp->AddDoubleRow("MySQLi-Extension", $mysql_check);
 
         // MySQL Server version
+        // TODO: Refactor  and check if Database is connected otherwise skip check
         $minMariaDBVersion = '10.0';
-        $currentMysqlVersion = $db->getServerInfo();
+        $currentMysqlVersion = $database->getServerInfo();
+
         if (!$currentMysqlVersion) {
             $mysqlVersionCheck = $not_possible . t('Konnte MySQL-Version nicht überprüfen, da keine Verbindung mit den Standarddaten (%1@%2) möglich war. <br/>Dies ist kein direkter Fehler, bedeutetet aber, dass einige Setup-Schritte per Hand durchgeführt werden müssen. <br/>Bitte Stelle sicher, dass du MySQL mindestens in Version %3 benutzt.', $configuration['database']['user'], $configuration['database']['server'], \LANSUITE_MINIMUM_MYSQL_VERSION);
         } elseif (str_contains($currentMysqlVersion, 'MariaDB')) {
             $currentMariaDBVersion = substr($currentMysqlVersion, strpos($currentMysqlVersion, '-')+1);
+            #TODO: Fix Version Compare function, if MariaDB is 11 it will fail
             if (version_compare($currentMariaDBVersion, $minMariaDBVersion) >= 0) {
                 $mysqlVersionCheck = $optimize . t('MariaDB Version %1 gefunden. <br/>Bitte beachte, das LanSuite primär für MySQL entwickelt wurde und es daher zu unerwarteten Problemen mit MariaDB kommen kann!', $currentMariaDBVersion);
             } else {
@@ -672,8 +675,8 @@ class Install
 
         // SQL mode
         $sqlmodeDisable = ['ONLY_FULL_GROUP_BY', 'STRICT_TRANS_TABLES'];
-        $res = $db->qry('SELECT @@SESSION.SQL_MODE AS sqlmode;');
-        $opts = $db->fetch_array($res)['sqlmode'];
+        $res = $database->queryWithOnlyFirstRow('SELECT @@SESSION.SQL_MODE AS sqlmode;');
+        $opts = $res['sqlmode'];
         $serverOpts = explode(',', $opts);
         $warnOpts = implode(',', array_values(array_intersect($serverOpts, $sqlmodeDisable)));
         $newSqlMode = implode(',', array_diff($serverOpts, $sqlmodeDisable));
@@ -815,41 +818,17 @@ class Install
         $dsp->AddDoubleRow('Max. Post-Form Size', (float)ini_get('post_max_size') .' MB');
         $dsp->AddFieldSetEnd();
 
-        if ($db->success) {
+        if ($database->IsConnected()) {
             $dsp->AddFieldSetStart(t('MySQL'));
 
             // key_buffer_size
-            $dsp->AddFieldSetStart(t('Key buffer size -  MySQL empfiehlt für optimale Performance: 25% des Arbeitsspeichers. Oft reicht weniger.'));
-            $res = $db->qry('SHOW variables LIKE "key_buffer_size"');
-            while ($row = $db->fetch_array($res)) {
-                $dsp->AddDoubleRow($row[0], $row[1]);
-            }
-            $db->free_result($res);
-            $dsp->AddFieldSetEnd();
+            $this->buildVarBlock(t('Key buffer size -  MySQL empfiehlt für optimale Performance: 25% des Arbeitsspeichers. Oft reicht weniger.'),'SHOW variables LIKE "key_buffer_size"');
 
             // Key_blocks
-            $dsp->AddFieldSetStart(t('Key blocks - Performance: Key_blocks_unused sollte niemals 0 erreichen! Wenn der Wert nahe 0 ist: key_buffer_size erhöhen'));
-            $res = $db->qry('SHOW status LIKE "Key_blocks%"');
-            while ($row = $db->fetch_array($res)) {
-                $dsp->AddDoubleRow($row[0], $row[1]);
-            }
-            $db->free_result($res);
-            $dsp->AddFieldSetEnd();
-
+            $this->buildVarBlock(t('Key blocks - Performance: Key_blocks_unused sollte niemals 0 erreichen! Wenn der Wert nahe 0 ist: key_buffer_size erhöhen'),'SHOW variables LIKE "key_buffer_size"');
             // Query cache
-            $dsp->AddFieldSetStart(t('Query cache - Beschleunigt MySQL-Abfragen. Sollte aktiv sein'));
-            $res = $db->qry('SHOW VARIABLES LIKE \'have_query_cache\'');
-            while ($row = $db->fetch_array($res)) {
-                $dsp->AddDoubleRow($row[0], $row[1]);
-            }
-            $db->free_result($res);
-            $res = $db->qry('SHOW STATUS LIKE \'Qcache%\'');
-            while ($row = $db->fetch_array($res)) {
-                $dsp->AddDoubleRow($row[0], $row[1]);
-            }
-            $db->free_result($res);
-            $dsp->AddFieldSetEnd();
-
+            $this->buildVarBlock(t('Query cache - Beschleunigt MySQL-Abfragen. Sollte aktiv sein'),"SHOW VARIABLES LIKE 'have_query_cache'");
+            $this->buildVarBlock(t('Query cache - Beschleunigt MySQL-Abfragen. Sollte aktiv sein'),"SHOW STATUS LIKE 'Qcache%'");
             $dsp->AddFieldSetEnd();
         }
 
@@ -1001,4 +980,18 @@ class Install
 
         return $smarty->fetch('modules/install/templates/module.htm');
     }
+
+    private function buildVarBlock($title,$query){
+        global $database, $dsp;
+
+        $dsp->AddFieldSetStart($title);
+        $var_info = $database->queryWithFullResult($query);
+        $var_len = count($var_info);
+        for($i = 0; $i < $var_len; $i++){
+            $dsp->AddDoubleRow($var_info[$i]["Variable_name"],$var_info[$i]["Value"]);
+        }
+        $dsp->AddFieldSetEnd();
+    }
 }
+
+

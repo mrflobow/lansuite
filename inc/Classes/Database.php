@@ -49,6 +49,8 @@ class Database
      */
     private string $tablePrefix = '';
 
+    private bool $connected = false;
+
     public function __construct($host, $port, $username, $password, $databaseName, $charset) {
         $this->host = $host;
         $this->port = $port;
@@ -61,20 +63,32 @@ class Database
     /**
      * Connects to the database
      */
-    public function connect(): bool
+    public function connect($selectdb = true): bool
     {
         // Set MySQL to throw exceptions.
         mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+        if($selectdb) $this->database = new \mysqli($this->host, $this->username, $this->password, $this->databaseName, $this->port);
+        else $this->database = new \mysqli($this->host, $this->username, $this->password,null,$this->port);
 
-        $this->database = new \mysqli($this->host, $this->username, $this->password, $this->databaseName, $this->port);
+        if ($this->database->connect_errno) return false;
 
         // We don't need to check if the connection was successful.
         // If it is _not_ successful, an exception will be thrown.
     
         $this->setCharset($this->charset);
+        $this->connected = true;
 
         return true;
     }
+
+
+    /**
+     * Returns if DB is connected
+     */
+    public function IsConnected(): bool{
+        return $this->connected;
+    }
+
 
     /**
      * Sets the table prefix.

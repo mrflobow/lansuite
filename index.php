@@ -248,8 +248,11 @@ if ($config['environment']['configured'] == 0) {
     $_GET['mod'] = 'install';
     $_GET['action'] = 'wizard';
 
-    // Silent connect
-    $db->connect(1);
+    /*
+    Use Database Class to get environment check values. 
+    Don't connect to a DB and this stage as its not known yet.
+    */
+    $database->connect(false);
     $IsAboutToInstall = 1;
 
     // Force Admin rights for installing User
